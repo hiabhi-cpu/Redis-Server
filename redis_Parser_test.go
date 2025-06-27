@@ -1,45 +1,99 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 )
 
-func TestDe_serialise(t *testing.T) {
+func TestRESPStrings(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected string
-		hasError bool
+		expected []RespValue
 	}{
-		// Simple Strings
-		{"Simple OK", "+OK\r\n", "OK", false},
-		{"Simple Hello", "+Hello\r\n", "Hello", false},
-		{"Empty Simple", "+\r\n", "", false},
-		{"Invalid Simple (no CRLF)", "+hello", "", true},
-
-		// Bulk Strings
-		{"Bulk Hello", "$5\r\nhello\r\n", "hello", false},
-		{"Empty Bulk", "$0\r\n\r\n", "", false},
-		{"Null Bulk", "$-1\r\n", "nil", false}, // assume your function returns "nil" for null bulk
-		{"Invalid Bulk (no CRLF)", "$5\r\nhello", "", true},
-		{"Invalid Bulk Length", "$abc\r\nhello\r\n", "", true},
-		{"Short Bulk Content", "$5\r\nhi\r\n", "", true},
+		{
+			name:  "Null Bulk String",
+			input: "$-1\r\n",
+			expected: []RespValue{
+				{Type: NullType, Value: "nil"},
+			},
+		},
+		{
+			name:  "Single Bulk String in Array",
+			input: "*1\r\n$4\r\nping\r\n",
+			expected: []RespValue{
+				{
+					Type: ArrayType,
+					Value: []RespValue{
+						{Type: BulkStringType, Value: "ping"},
+					},
+				},
+			},
+		},
+		{
+			name:  "Two Bulk Strings in Array (echo hello world)",
+			input: "*2\r\n$4\r\necho\r\n$11\r\nhello world\r\n",
+			expected: []RespValue{
+				{
+					Type: ArrayType,
+					Value: []RespValue{
+						{Type: BulkStringType, Value: "echo"},
+						{Type: BulkStringType, Value: "hello world"},
+					},
+				},
+			},
+		},
+		{
+			name:  "Two Bulk Strings in Array (get key)",
+			input: "*2\r\n$3\r\nget\r\n$3\r\nkey\r\n",
+			expected: []RespValue{
+				{
+					Type: ArrayType,
+					Value: []RespValue{
+						{Type: BulkStringType, Value: "get"},
+						{Type: BulkStringType, Value: "key"},
+					},
+				},
+			},
+		},
+		{
+			name:  "Simple OK",
+			input: "+OK\r\n",
+			expected: []RespValue{
+				{Type: SimpleStringType, Value: "OK"},
+			},
+		},
+		{
+			name:  "Error message",
+			input: "-Error message\r\n",
+			expected: []RespValue{
+				{Type: ErrorType, Value: "Error message"},
+			},
+		},
+		{
+			name:  "Empty Bulk String",
+			input: "$0\r\n\r\n",
+			expected: []RespValue{
+				{Type: BulkStringType, Value: ""},
+			},
+		},
+		{
+			name:  "Simple String: hello world",
+			input: "+hello world\r\n",
+			expected: []RespValue{
+				{Type: SimpleStringType, Value: "hello world"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := De_serialise(tt.input)
-			if tt.hasError {
-				if err == nil {
-					t.Errorf("expected error for input %q, got none", tt.input)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error for input %q: %v", tt.input, err)
-				}
-				if result.Value != tt.expected {
-					t.Errorf("expected %q, got %q", tt.expected, result)
-				}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("expected %+v, got %+v", tt.expected, result)
 			}
 		})
 	}

@@ -2,89 +2,144 @@ package main
 
 import (
 	"errors"
+
 	"strconv"
 	"strings"
 )
 
-func De_serialise(cmd string) (RespValue, error) {
+func De_serialise(cmd string) ([]RespValue, error) {
 	if !isValidCmd(cmd) {
-		return RespValue{}, errors.New("Not valid strings")
+		return []RespValue{}, errors.New("Not valid strings")
 	}
 	cmds := strings.Split(cmd, "\r\n")
-	// fmt.Println(len(cmds))
-	// fmt.Println(isValidCmd(cmd))
 	i := 0
-	var res RespValue
+	res := make([]RespValue, 0)
 	stringLineCnt := 0
 
-	var currChar byte
-	if len(cmds[i]) != 0 {
-		currChar = cmds[i][0]
-	} else {
-		currChar = ' '
-	}
-	if currChar == '+' {
-		if stringLineCnt > 0 {
-			return RespValue{}, errors.New("Has multiple strings in same line")
+	for i < len(cmds) {
+		var currChar byte
+		if len(cmds[i]) != 0 {
+			currChar = cmds[i][0]
+		} else {
+			currChar = ' '
 		}
-		stringLineCnt++
-		temRes, err := parseString(cmds[i])
-		if err != nil {
-			return RespValue{}, errors.New("Need to have correct bulk string")
-		}
-		res = RespValue{
-			Type:  SimpleStringType,
-			Value: temRes,
-		}
-	} else if currChar == '$' {
-		if cmds[i][1:] == "-1" {
-			return RespValue{
-				Type:  NullType,
-				Value: "nil",
-			}, nil
-		}
-		if i+1 >= len(cmds)-1 {
-			return RespValue{}, errors.New("Need to have correct bulk string")
-		}
-		tempRes, err := parseBulkString(cmds[i], cmds[i+1])
-		if err != nil {
-			return RespValue{}, errors.New("Need to have correct bulk string")
-		}
-		res = RespValue{
-			Type:  BulkStringType,
-			Value: tempRes,
-		}
-	} else if currChar == '-' {
-		// return
-	}
+		if currChar == '+' {
+			if stringLineCnt > 0 {
+				return []RespValue{}, errors.New("Has multiple strings in same line")
+			}
+			stringLineCnt++
+			temRes, err := parseString(cmds[i])
+			if err != nil {
+				return []RespValue{}, errors.New("Need to have correct bulk string")
+			}
 
-	// fmt.Println(res)
+			res = append(res, temRes)
+		} else if currChar == '$' {
+			if cmds[i][1:] == "-1" {
+				return append(res, RespValue{
+					Type:  NullType,
+					Value: "nil",
+				}), nil
+			}
+			if i+1 >= len(cmds)-1 {
+				return []RespValue{}, errors.New("Need to have correct bulk string")
+			}
+			tempRes, err := parseBulkString(cmds[i], cmds[i+1])
+			if err != nil {
+				return []RespValue{}, errors.New("Need to have correct bulk string")
+			}
+
+			res = append(res, tempRes)
+		} else if currChar == '-' {
+			tempRes, err := parseError(cmds[i])
+			if err != nil {
+				return []RespValue{}, errors.New("Need to have correct bulk string")
+			}
+			res = append(res, tempRes)
+		} else if currChar == ':' {
+			tempRes, err := parseInt(cmds[i])
+			if err != nil {
+				return []RespValue{}, errors.New("Need to have correct bulk string")
+			}
+			res = append(res, tempRes)
+		} else if currChar == '*' {
+			n, tempRes, err := parseArray(cmds[i:])
+			if err != nil {
+				return []RespValue{}, errors.New("Error in array")
+			}
+			i += n
+			res = append(res, tempRes)
+		}
+		i++
+	}
 	return res, nil
 }
 
 func isValidCmd(cmd string) bool {
-	// fmt.Println("Is valid checking")
 	cmds := strings.Split(cmd, "\r\n")
 
 	return cmds[len(cmds)-1] == ""
 }
 
-func parseString(cmd string) (string, error) {
-	// fmt.Println(cmd[1:])
-	return cmd[1:], nil
+func parseString(cmd string) (RespValue, error) {
+	return RespValue{
+		Type:  SimpleStringType,
+		Value: cmd[1:],
+	}, nil
 }
 
-func parseBulkString(size, cmd string) (string, error) {
-	// fmt.Println(size)
+func parseBulkString(size, cmd string) (RespValue, error) {
 	intSize, err := strconv.Atoi(size[1:])
 	if err != nil {
-		return "", getError("No correct int in bulk")
+		return RespValue{}, getError("No correct int in bulk")
 	}
 	if intSize != len(cmd) {
-		return "", getError("Bulk String length not correctly given")
+		return RespValue{}, getError("Bulk String length not correctly given")
 	}
-	// fmt.Println(len(cmd))
-	return cmd, nil
+
+	return RespValue{
+		Type:  BulkStringType,
+		Value: cmd,
+	}, nil
+}
+
+func parseError(cmd string) (RespValue, error) {
+	return RespValue{
+		Value: cmd[1:],
+		Type:  ErrorType,
+	}, nil
+}
+
+func parseInt(cmd string) (RespValue, error) {
+	n, err := strconv.Atoi(cmd[1:])
+	if err != nil {
+		return RespValue{}, err
+	}
+	return RespValue{
+		Value: n,
+		Type:  IntegerType,
+	}, nil
+}
+
+func parseArray(cmd []string) (int, RespValue, error) {
+	n, err := strconv.Atoi(cmd[1][1:])
+	if err != nil {
+		return 0, RespValue{}, err
+	}
+	tempCmd := ""
+	for i := 1; i < len(cmd); i++ {
+		tempCmd = tempCmd + cmd[i] + "\r\n"
+	}
+	// fmt.Println(tempCmd)
+	tempResVal, err := De_serialise(tempCmd)
+	if err != nil {
+		return 0, RespValue{}, err
+	}
+	res := RespValue{
+		Value: tempResVal,
+		Type:  ArrayType,
+	}
+	return n, res, nil
 }
 
 func getError(str string) error {
