@@ -1,72 +1,46 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
 	"testing"
 )
 
-func TestParseSimpleStrings(t *testing.T) {
+func TestDe_serialise(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    []byte
+		input    string
 		expected string
 		hasError bool
 	}{
-		{
-			name:     "OK reply",
-			input:    []byte("+OK\r\n"),
-			expected: "OK",
-		},
-		{
-			name:     "hello reply",
-			input:    []byte("+hello\r\n"),
-			expected: "hello",
-		},
-		{
-			name:     "empty reply",
-			input:    []byte("+\r\n"),
-			expected: "",
-		},
-		{
-			name:     "no CRLF",
-			input:    []byte("+hello"),
-			hasError: true,
-		},
-		{
-			name:     "multiple lines",
-			input:    []byte("+hello\r\n+world\r\n"),
-			expected: "hello",
-		},
+		// Simple Strings
+		{"Simple OK", "+OK\r\n", "OK", false},
+		{"Simple Hello", "+Hello\r\n", "Hello", false},
+		{"Empty Simple", "+\r\n", "", false},
+		{"Invalid Simple (no CRLF)", "+hello", "", true},
+
+		// Bulk Strings
+		{"Bulk Hello", "$5\r\nhello\r\n", "hello", false},
+		{"Empty Bulk", "$0\r\n\r\n", "", false},
+		{"Null Bulk", "$-1\r\n", "nil", false}, // assume your function returns "nil" for null bulk
+		{"Invalid Bulk (no CRLF)", "$5\r\nhello", "", true},
+		{"Invalid Bulk Length", "$abc\r\nhello\r\n", "", true},
+		{"Short Bulk Content", "$5\r\nhi\r\n", "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseRESP(tt.input)
-
-			if tt.hasError && err == nil {
-				t.Fatalf("expected error but got none for input %q", tt.input)
-			}
-			if !tt.hasError && err != nil {
-				t.Fatalf("unexpected error for input %q: %v", tt.input, err)
-			}
-			if !tt.hasError && result != tt.expected {
-				t.Fatalf("expected %q but got %q for input %q", tt.expected, result, tt.input)
+			result, err := De_serialise(tt.input)
+			if tt.hasError {
+				if err == nil {
+					t.Errorf("expected error for input %q, got none", tt.input)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error for input %q: %v", tt.input, err)
+				}
+				if result.Value != tt.expected {
+					t.Errorf("expected %q, got %q", tt.expected, result)
+				}
 			}
 		})
 	}
-}
-
-// Example Parser (you'd have this implemented in your resp.go)
-func ParseRESP(data []byte) (string, error) {
-	if len(data) == 0 || data[0] != '+' {
-		return "", fmt.Errorf("invalid simple string")
-	}
-	// Find the end of the line
-	end := bytes.Index(data, []byte("\r\n"))
-	if end == -1 {
-		return "", fmt.Errorf("no CRLF found")
-	}
-	// Extract the payload
-	return string(data[1:end]), nil
 }

@@ -4,5 +4,9 @@ import "fmt"
 
 func main() {
 	fmt.Println("Hello")
-	redis_Parser("$2\r\nhi\r\n")
+	_, err := De_serialise("$2\r\nOK\r\n")
+	if err != nil {
+		fmt.Println(err)
+	}
+	// fmt.Println(str)
 }
