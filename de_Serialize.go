@@ -12,6 +12,9 @@ func De_serialise(cmd string) ([]RespValue, error) {
 		return []RespValue{}, errors.New("Not valid strings")
 	}
 	cmds := strings.Split(cmd, "\r\n")
+	if len(cmds) == 0 {
+		return []RespValue{}, errors.New("Not valid strings")
+	}
 	i := 0
 	res := make([]RespValue, 0)
 	stringLineCnt := 0
@@ -91,12 +94,12 @@ func parseString(cmd string) (RespValue, error) {
 func parseBulkString(size, cmd string) (RespValue, error) {
 	intSize, err := strconv.Atoi(size[1:])
 	if err != nil {
-		return RespValue{}, getError("No correct int in bulk")
+		return RespValue{}, GetError("No correct int in bulk")
 	}
 	if intSize != len(cmd) {
-		return RespValue{}, getError("Bulk String length not correctly given")
+		return RespValue{}, GetError("Bulk String length not correctly given")
 	}
-
+	// fmt.Println(len(cmd))
 	return RespValue{
 		Type:  BulkStringType,
 		Value: cmd,
@@ -122,7 +125,7 @@ func parseInt(cmd string) (RespValue, error) {
 }
 
 func parseArray(cmd []string) (int, RespValue, error) {
-	n, err := strconv.Atoi(cmd[1][1:])
+	n, err := strconv.Atoi(cmd[0][1:])
 	if err != nil {
 		return 0, RespValue{}, err
 	}
@@ -130,7 +133,6 @@ func parseArray(cmd []string) (int, RespValue, error) {
 	for i := 1; i < len(cmd); i++ {
 		tempCmd = tempCmd + cmd[i] + "\r\n"
 	}
-	// fmt.Println(tempCmd)
 	tempResVal, err := De_serialise(tempCmd)
 	if err != nil {
 		return 0, RespValue{}, err
@@ -139,9 +141,12 @@ func parseArray(cmd []string) (int, RespValue, error) {
 		Value: tempResVal,
 		Type:  ArrayType,
 	}
-	return n, res, nil
+	if n != len(tempResVal) {
+		return 0, RespValue{}, GetError("Not correct array elements")
+	}
+	return n + 1, res, nil
 }
 
-func getError(str string) error {
+func GetError(str string) error {
 	return errors.New(str)
 }

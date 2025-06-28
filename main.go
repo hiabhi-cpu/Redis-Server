@@ -7,6 +7,13 @@ func main() {
 	res, err := De_serialise("*2\r\n$3\r\nget\r\n$3\r\nkey\r\n")
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 	fmt.Println(res)
+	strRes, err := Serialise(res)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(strRes)
 }
