@@ -43,6 +43,8 @@ func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	fmt.Println("New client connected")
 
+	buffHash := make(map[string]RespValue)
+
 	buf := make([]byte, 1024)
 	for {
 		n, err := conn.Read(buf)
@@ -60,6 +62,7 @@ func handleConnection(conn net.Conn) {
 			conn.Write([]byte("-ERR invalid input\r\n"))
 			continue
 		}
+		res = res[:1]
 		// Redis commands are sent as array
 		if len(res) != 1 || res[0].Type != ArrayType {
 			conn.Write([]byte("-ERR invalid command format\r\n"))
@@ -85,6 +88,24 @@ func handleConnection(conn net.Conn) {
 				reply = RespValue{Type: ErrorType, Value: "ECHO requires a message"}
 			} else {
 				reply = RespValue{Type: BulkStringType, Value: cmdArray[1].Value.(string)}
+			}
+		case "SET":
+			if len(cmdArray) < 3 {
+				reply = RespValue{Type: ErrorType, Value: "SET requires a key value pair"}
+			} else {
+				buffHash[cmdArray[1].Value.(string)] = cmdArray[2]
+				reply = RespValue{Type: SimpleStringType, Value: "OK"}
+			}
+		case "GET":
+			if len(cmdArray) < 2 {
+				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+			} else {
+				val, err := buffHash[cmdArray[1].Value.(string)]
+				if err == false {
+					reply = RespValue{Type: ErrorType, Value: "Key not found"}
+				} else {
+					reply = RespValue{Type: BulkStringType, Value: val.Value.(string)}
+				}
 			}
 		default:
 			reply = RespValue{Type: ErrorType, Value: "unknown command"}
