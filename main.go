@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 )
 
 func main() {
@@ -39,11 +40,12 @@ func main() {
 	}
 }
 
+var buffHash = make(map[string]RespValue)
+var mux sync.Mutex
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	fmt.Println("New client connected")
-
-	buffHash := make(map[string]RespValue)
 
 	buf := make([]byte, 1024)
 	for {
@@ -54,7 +56,7 @@ func handleConnection(conn net.Conn) {
 		}
 
 		input := string(buf[:n])
-		fmt.Printf("Received: %s", input)
+		fmt.Println("Received:  ", input)
 
 		res, err := De_serialise(input)
 		if err != nil {
@@ -80,6 +82,7 @@ func handleConnection(conn net.Conn) {
 		fmt.Println(res)
 		fmt.Println(cmdArray)
 		var reply RespValue
+		mux.Lock()
 		switch command {
 		case "PING":
 			reply = RespValue{Type: SimpleStringType, Value: "PONG"}
@@ -110,6 +113,7 @@ func handleConnection(conn net.Conn) {
 		default:
 			reply = RespValue{Type: ErrorType, Value: "unknown command"}
 		}
+		mux.Unlock()
 
 		serial, err := Serialise([]RespValue{reply})
 		if err != nil {
