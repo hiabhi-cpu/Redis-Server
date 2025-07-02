@@ -15,3 +15,8 @@ type RespValue struct {
 	Type  RespType
 	Value any
 }
+
+type Entry struct {
+	Value  RespValue
+	Expire int64
+}

@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
 	}
 }
 
-var buffHash = make(map[string]RespValue)
+var buffHash = make(map[string]Entry)
 var mux sync.Mutex
 
 func handleConnection(conn net.Conn) {
@@ -79,7 +80,7 @@ func handleConnection(conn net.Conn) {
 		}
 
 		command := strings.ToUpper(cmdArray[0].Value.(string))
-		fmt.Println(res)
+		// fmt.Println(res)
 		fmt.Println(cmdArray)
 		var reply RespValue
 		mux.Lock()
@@ -96,18 +97,31 @@ func handleConnection(conn net.Conn) {
 			if len(cmdArray) < 3 {
 				reply = RespValue{Type: ErrorType, Value: "SET requires a key value pair"}
 			} else {
-				buffHash[cmdArray[1].Value.(string)] = cmdArray[2]
+				expireTime, err := GetExpireTime(cmdArray)
+				if err != nil {
+					reply = RespValue{Type: ErrorType, Value: err}
+					break
+				}
+				buffHash[cmdArray[1].Value.(string)] = Entry{Value: cmdArray[2], Expire: expireTime}
 				reply = RespValue{Type: SimpleStringType, Value: "OK"}
 			}
 		case "GET":
 			if len(cmdArray) < 2 {
 				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
 			} else {
-				val, err := buffHash[cmdArray[1].Value.(string)]
+				entry, err := buffHash[cmdArray[1].Value.(string)]
 				if err == false {
 					reply = RespValue{Type: ErrorType, Value: "Key not found"}
+					// fmt.Println(buffHash)
 				} else {
-					reply = RespValue{Type: BulkStringType, Value: val.Value.(string)}
+					if entry.Expire > 0 && entry.Expire < time.Now().UnixMilli() {
+						delete(buffHash, cmdArray[1].Value.(string))
+						reply = RespValue{Type: ErrorType, Value: "Key expired "}
+						// fmt.Println(buffHash)
+					} else {
+						reply = RespValue{Type: BulkStringType, Value: entry.Value.Value.(string)}
+					}
+
 				}
 			}
 		default:
