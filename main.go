@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -120,6 +121,88 @@ func handleConnection(conn net.Conn) {
 						// fmt.Println(buffHash)
 					} else {
 						reply = RespValue{Type: BulkStringType, Value: entry.Value.Value.(string)}
+					}
+
+				}
+			}
+		case "EXISTS":
+			if len(cmdArray) < 2 {
+				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+			} else {
+				entry, err := buffHash[cmdArray[1].Value.(string)]
+				if err == false {
+					reply = RespValue{Type: ErrorType, Value: "Key not found"}
+					// fmt.Println(buffHash)
+				} else {
+					if entry.Expire > 0 && entry.Expire < time.Now().UnixMilli() {
+						delete(buffHash, cmdArray[1].Value.(string))
+						reply = RespValue{Type: ErrorType, Value: "Key expired "}
+						// fmt.Println(buffHash)
+					} else {
+						reply = RespValue{Type: BulkStringType, Value: "Key found"}
+					}
+
+				}
+			}
+		case "DEL":
+			if len(cmdArray) < 2 {
+				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+			} else {
+				delKeys := cmdArray[1:]
+				fmt.Println(delKeys)
+				for _, r := range delKeys {
+					delete(buffHash, r.Value.(string))
+				}
+				reply = RespValue{Type: BulkStringType, Value: "Deleted Values"}
+			}
+		case "INCR":
+			if len(cmdArray) < 2 {
+				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+			} else {
+				entry, err := buffHash[cmdArray[1].Value.(string)]
+				if err == false {
+					reply = RespValue{Type: ErrorType, Value: "Key not found"}
+					// fmt.Println(buffHash)
+				} else {
+					if entry.Expire > 0 && entry.Expire < time.Now().UnixMilli() {
+						delete(buffHash, cmdArray[1].Value.(string))
+						reply = RespValue{Type: ErrorType, Value: "Key expired "}
+						// fmt.Println(buffHash)
+					} else {
+						num, err := strconv.Atoi(entry.Value.Value.(string))
+						if err != nil {
+							reply = RespValue{Type: ErrorType, Value: "Value of key is not integer"}
+							break
+						}
+						entry.Value.Value = fmt.Sprint((num + 1))
+						buffHash[cmdArray[1].Value.(string)] = entry
+						reply = RespValue{Type: BulkStringType, Value: "Key Incremented"}
+					}
+
+				}
+			}
+		case "DECR":
+			if len(cmdArray) < 2 {
+				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+			} else {
+				entry, err := buffHash[cmdArray[1].Value.(string)]
+				if err == false {
+					reply = RespValue{Type: ErrorType, Value: "Key not found"}
+					// fmt.Println(buffHash)
+				} else {
+					if entry.Expire > 0 && entry.Expire < time.Now().UnixMilli() {
+						delete(buffHash, cmdArray[1].Value.(string))
+						reply = RespValue{Type: ErrorType, Value: "Key expired "}
+						// fmt.Println(buffHash)
+					} else {
+						num, err := strconv.Atoi(entry.Value.Value.(string))
+						if err != nil {
+							reply = RespValue{Type: ErrorType, Value: "Value of key is not integer"}
+							break
+						}
+						entry.Value.Value = fmt.Sprint((num - 1))
+						buffHash[cmdArray[1].Value.(string)] = entry
+						reply = RespValue{Type: BulkStringType, Value: "Key Decremented"}
 					}
 
 				}
