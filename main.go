@@ -120,14 +120,14 @@ func handleConnection(conn net.Conn) {
 						reply = RespValue{Type: ErrorType, Value: "Key expired "}
 						// fmt.Println(buffHash)
 					} else {
-						reply = RespValue{Type: BulkStringType, Value: entry.Value.Value.(string)}
+						reply = getRequiredReply(entry)
 					}
 
 				}
 			}
 		case "EXISTS":
 			if len(cmdArray) < 2 {
-				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+				reply = RespValue{Type: ErrorType, Value: "EXISTS requires a key"}
 			} else {
 				entry, err := buffHash[cmdArray[1].Value.(string)]
 				if err == false {
@@ -146,7 +146,7 @@ func handleConnection(conn net.Conn) {
 			}
 		case "DEL":
 			if len(cmdArray) < 2 {
-				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+				reply = RespValue{Type: ErrorType, Value: "DEL requires a key"}
 			} else {
 				delKeys := cmdArray[1:]
 				fmt.Println(delKeys)
@@ -157,7 +157,7 @@ func handleConnection(conn net.Conn) {
 			}
 		case "INCR":
 			if len(cmdArray) < 2 {
-				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+				reply = RespValue{Type: ErrorType, Value: "INCR requires a key"}
 			} else {
 				entry, err := buffHash[cmdArray[1].Value.(string)]
 				if err == false {
@@ -183,7 +183,7 @@ func handleConnection(conn net.Conn) {
 			}
 		case "DECR":
 			if len(cmdArray) < 2 {
-				reply = RespValue{Type: ErrorType, Value: "GET requires a key"}
+				reply = RespValue{Type: ErrorType, Value: "DECR requires a key"}
 			} else {
 				entry, err := buffHash[cmdArray[1].Value.(string)]
 				if err == false {
@@ -207,6 +207,56 @@ func handleConnection(conn net.Conn) {
 
 				}
 			}
+		case "LPUSH":
+			if len(cmdArray) < 3 {
+				reply = RespValue{Type: ErrorType, Value: "LPUSH requires a vaiable and a list"}
+			} else {
+
+				varName := cmdArray[1].Value.(string)
+				newlistValues := cmdArray[2:]
+				fmt.Println("push values", varName, "with values", newlistValues)
+				entry, ok := buffHash[varName]
+				if !ok || entry.Value.Type != ArrayType {
+					// Create a new list if it doesn't exist or is not a list
+					entry = Entry{Value: RespValue{Type: ArrayType, Value: []RespValue{}}}
+				}
+				respList := entry.Value.Value.([]RespValue)
+
+				for i := 0; i < len(newlistValues); i++ {
+					respList = append([]RespValue{newlistValues[i]}, respList...)
+
+				}
+				fmt.Println(respList)
+				entry.Value = RespValue{Type: ArrayType, Value: respList}
+				buffHash[varName] = entry
+				reply = RespValue{Type: IntegerType, Value: len(respList)}
+			}
+
+		case "RPUSH":
+			if len(cmdArray) < 3 {
+				reply = RespValue{Type: ErrorType, Value: "RPUSH requires a vaiable and a list"}
+			} else {
+
+				varName := cmdArray[1].Value.(string)
+				newlistValues := cmdArray[2:]
+				fmt.Println("push values", varName, "with values", newlistValues)
+				entry, ok := buffHash[varName]
+				if !ok || entry.Value.Type != ArrayType {
+					// Create a new list if it doesn't exist or is not a list
+					entry = Entry{Value: RespValue{Type: ArrayType, Value: []RespValue{}}}
+				}
+				respList := entry.Value.Value.([]RespValue)
+
+				for i := 0; i < len(newlistValues); i++ {
+					respList = append(respList, newlistValues[i])
+
+				}
+
+				fmt.Println(respList)
+				entry.Value = RespValue{Type: ArrayType, Value: respList}
+				buffHash[varName] = entry
+				reply = RespValue{Type: IntegerType, Value: len(respList)}
+			}
 		default:
 			reply = RespValue{Type: ErrorType, Value: "unknown command"}
 		}
@@ -218,6 +268,18 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 		conn.Write([]byte(serial))
+	}
+
+}
+
+func getRequiredReply(entry Entry) RespValue {
+	switch entry.Value.Type {
+	case BulkStringType:
+		return RespValue{Type: BulkStringType, Value: entry.Value.Value.(string)}
+	case ArrayType:
+		return RespValue{Type: ArrayType, Value: entry.Value.Value.([]RespValue)}
+	default:
+		return RespValue{Type: ErrorType, Value: "Nothing to return"}
 	}
 
 }
