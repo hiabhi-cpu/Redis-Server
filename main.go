@@ -1,13 +1,18 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+const FilePath string = "data.json"
 
 func main() {
 	// fmt.Println("Hello")
@@ -31,7 +36,11 @@ func main() {
 	defer listener.Close()
 
 	fmt.Println("Redis lite server is listening to port :6379....")
-
+	err = loadFromFile()
+	if err != nil {
+		fmt.Println("Error Loading file", err)
+		return
+	}
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -257,6 +266,8 @@ func handleConnection(conn net.Conn) {
 				buffHash[varName] = entry
 				reply = RespValue{Type: IntegerType, Value: len(respList)}
 			}
+		case "SAVE":
+			reply = saveToLocal()
 		default:
 			reply = RespValue{Type: ErrorType, Value: "unknown command"}
 		}
@@ -282,4 +293,36 @@ func getRequiredReply(entry Entry) RespValue {
 		return RespValue{Type: ErrorType, Value: "Nothing to return"}
 	}
 
+}
+
+func saveToLocal() RespValue {
+	file, err := os.Create(FilePath)
+	if err != nil {
+		return RespValue{Type: ErrorType, Value: "Error in opening file"}
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	err = encoder.Encode(buffHash)
+	if err != nil {
+		return RespValue{Type: ErrorType, Value: "Error in opening file"}
+	}
+	return RespValue{Type: BulkStringType, Value: "Saved to file"}
+}
+
+func loadFromFile() error {
+	file, err := os.Open(FilePath)
+	if err != nil {
+		return errors.New("Error in opeing file")
+	}
+	defer file.Close()
+
+	var data map[string]Entry
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&data)
+	if err != nil {
+		return err
+	}
+	buffHash = data
+	return nil
 }

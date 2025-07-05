@@ -12,11 +12,11 @@ const (
 )
 
 type RespValue struct {
-	Type  RespType
-	Value any
+	Type  RespType `json:"type"`
+	Value any      `json:"value"`
 }
 
 type Entry struct {
-	Value  RespValue
-	Expire int64
+	Value  RespValue `json:"value"`
+	Expire int64     `json:"expire"`
 }
